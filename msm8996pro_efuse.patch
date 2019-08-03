@@ -1,0 +1,92 @@
+diff --git a/arch/arm64/configs/lineage_zl1_defconfig b/arch/arm64/configs/lineage_zl1_defconfig
+index c781d01..2cf15f5 100755
+--- a/arch/arm64/configs/lineage_zl1_defconfig
++++ b/arch/arm64/configs/lineage_zl1_defconfig
+@@ -4654,3 +4654,4 @@ CONFIG_ARCH_HAS_SG_CHAIN=y
+ CONFIG_QMI_ENCDEC=y
+ # CONFIG_QMI_ENCDEC_DEBUG is not set
+ # CONFIG_STRICT_MEMORY_RWX is not set
++CONFIG_MSM8996PRO_OVERRIDE_EFUSE=y
+\ No newline at end of file
+diff --git a/drivers/clk/msm/Kconfig b/drivers/clk/msm/Kconfig
+index 17102dd..1c8e4ef 100644
+--- a/drivers/clk/msm/Kconfig
++++ b/drivers/clk/msm/Kconfig
+@@ -4,4 +4,9 @@ config MSM_CLK_CONTROLLER_V2
+ 	   Generate clock data structures from definitions found in
+ 	   device tree.
+ 
++config MSM8996PRO_OVERRIDE_EFUSE
++	bool "msm8996pro override efuse"
++	---help---
++	   msm8996pro override efuse for cpu and gpu.
++
+ source "drivers/clk/msm/mdss/Kconfig"
+diff --git a/drivers/clk/msm/clock-cpu-8996.c b/drivers/clk/msm/clock-cpu-8996.c
+index 0c97915..5b2e320 100644
+--- a/drivers/clk/msm/clock-cpu-8996.c
++++ b/drivers/clk/msm/clock-cpu-8996.c
+@@ -1504,7 +1504,13 @@ static int cpu_clock_8996_driver_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	pte_efuse = readl_relaxed(vbases[EFUSE_BASE]);
++	
++#ifdef CONFIG_MSM8996PRO_OVERRIDE_EFUSE	
++	perfclspeedbin = 0;
++#else
+ 	perfclspeedbin = ((pte_efuse >> EFUSE_SHIFT) & EFUSE_MASK);
++#endif
++
+ 	dev_info(&pdev->dev, "using perf/pwr/cbf speed bin %u and pvs_ver %d\n",
+ 		 perfclspeedbin, pvs_ver);
+ 
+diff --git a/drivers/clk/msm/clock-mmss-8996.c b/drivers/clk/msm/clock-mmss-8996.c
+index cdbc5e8..3132a0e 100644
+--- a/drivers/clk/msm/clock-mmss-8996.c
++++ b/drivers/clk/msm/clock-mmss-8996.c
+@@ -3762,7 +3762,13 @@ int msm_mmsscc_8996_probe(struct platform_device *pdev)
+ 	is_pro = of_device_is_compatible(pdev->dev.of_node,
+ 						"qcom,mmsscc-8996-pro");
+ 	if (is_pro) {
+-		gpu_speed_bin = ((efuse >> EFUSE_SHIFT_PRO) & EFUSE_MASK_PRO);
++		
++#ifdef CONFIG_MSM8996PRO_OVERRIDE_EFUSE	
++	gpu_speed_bin = 0;
++#else
++	gpu_speed_bin = ((efuse >> EFUSE_SHIFT_PRO) & EFUSE_MASK_PRO);
++#endif
++
+ 		msm_mmsscc_8996_v3_fixup();
+ 		if (!gpu_speed_bin)
+ 			msm_mmsscc_8996_pro_fixup();
+diff --git a/drivers/gpu/msm/adreno_a5xx.c b/drivers/gpu/msm/adreno_a5xx.c
+index 00248922..ff2f93f 100644
+--- a/drivers/gpu/msm/adreno_a5xx.c
++++ b/drivers/gpu/msm/adreno_a5xx.c
+@@ -147,6 +147,10 @@ static void a530_efuse_speed_bin(struct adreno_device *adreno_dev)
+ 	adreno_efuse_read_u32(adreno_dev, speed_bin[0], &val);
+ 
+ 	adreno_dev->speed_bin = (val & speed_bin[1]) >> speed_bin[2];
++	
++#ifdef CONFIG_MSM8996PRO_OVERRIDE_EFUSE	
++	adreno_dev->speed_bin = 0;
++#endif
+ }
+ 
+ static const struct {
+diff --git a/drivers/regulator/cpr3-hmss-regulator.c b/drivers/regulator/cpr3-hmss-regulator.c
+index e3df844..55abff3 100644
+--- a/drivers/regulator/cpr3-hmss-regulator.c
++++ b/drivers/regulator/cpr3-hmss-regulator.c
+@@ -469,6 +469,11 @@ static int cpr3_msm8996_hmss_read_fuse_data(struct cpr3_regulator *vreg)
+ 		cpr3_err(vreg, "Unable to read speed bin fuse, rc=%d\n", rc);
+ 		return rc;
+ 	}
++	
++#ifdef CONFIG_MSM8996PRO_OVERRIDE_EFUSE	
++	fuse->speed_bin = 0;
++#endif
++
+ 	cpr3_info(vreg, "speed bin = %llu\n", fuse->speed_bin);
+ 
+ 	rc = cpr3_read_fuse_param(base, msm8996_cpr_fusing_rev_param,
